@@ -79,29 +79,46 @@ function formatPrompt(message, history, templateType) {
 function cleanOutput(output, templateType) {
     let cleanOutput = output;
     
+    // Nettoyage général pour tous les templates
+    cleanOutput = cleanOutput
+        .replace(/\[end of text\]/gi, '')           // Supprimer [end of text]
+        .replace(/<\|endoftext\|>/gi, '')          // Supprimer <|endoftext|>
+        .replace(/<\/s>/gi, '')                     // Supprimer </s>
+        .replace(/<s>/gi, '')                       // Supprimer <s>
+        .replace(/\[EOS\]/gi, '')                   // Supprimer [EOS]
+        .replace(/\[\/INST\]/gi, '')                // Supprimer [/INST]
+        .replace(/\<\|eot_id\|\>/gi, '')            // Supprimer <|eot_id|>
+        .replace(/\n\s*\n\s*\n/g, '\n\n')          // Réduire multiples sauts de ligne
+        .trim();
+    
+    // Nettoyage spécifique selon le template
     switch (templateType) {
         case 'vigogne_chat':
             cleanOutput = cleanOutput
-                .replace(/<\|UTILISATEUR\|>:.*$/g, '') // Supprimer les répétitions
-                .replace(/<\|ASSISTANT\|>:/g, '')
+                .replace(/<\|UTILISATEUR\|>:.*$/g, '')   // Supprimer répétitions utilisateur
+                .replace(/<\|ASSISTANT\|>:/g, '')        // Supprimer le préfixe assistant
+                .replace(/^[\s\n]+/g, '')                // Supprimer espaces en début
                 .trim();
             break;
             
         case 'vigogne_instruct':
             cleanOutput = cleanOutput
-                .replace(/### Instruction:.*$/g, '')
-                .replace(/### Response:/g, '')
+                .replace(/### Instruction:.*$/g, '')     // Supprimer répétitions instruction
+                .replace(/### Response:/g, '')           // Supprimer le préfixe response
                 .trim();
             break;
             
         case 'chatml':
         default:
             cleanOutput = cleanOutput
-                .replace(/<\|im_end\|>/g, '')
-                .replace(/<\|im_start\|>.*$/g, '')
+                .replace(/<\|im_end\|>/g, '')            // Supprimer im_end
+                .replace(/<\|im_start\|>.*$/g, '')       // Supprimer répétitions im_start
                 .trim();
             break;
     }
+    
+    // Supprimer les lignes vides au début et à la fin
+    cleanOutput = cleanOutput.replace(/^\s+|\s+$/g, '');
     
     return cleanOutput;
 }
@@ -155,7 +172,11 @@ function callLlamaCpp(prompt, templateType) {
             '-b', config.llamaArgs.batch_size.toString(),
             '--no-display-prompt',
             '-e',  // Traiter les échappements
-            '-s', '-1'  // Seed aléatoire
+            '-s', '-1',  // Seed aléatoire
+            '--stop', '[end of text]',    // Stop sur [end of text]
+            '--stop', '<|endoftext|>',    // Stop sur <|endoftext|>
+            '--stop', '</s>',             // Stop sur </s>
+            '--stop', '<|UTILISATEUR|>:'  // Stop si l'utilisateur recommence à parler
         ];
 
         console.log('Commande llama.cpp:', config.llamaCppPath, args.join(' '));
@@ -236,5 +257,6 @@ app.listen(PORT, () => {
     console.log(`⚙️  llama.cpp: ${config.llamaCppPath}`);
     console.log(`📝 Template: ${templateType}`);
     console.log(`⏰ Timeout: 90 secondes`);
+    console.log(`🧹 Nettoyage automatique des tokens de fin`);
     console.log(`💬 Première génération peut prendre 30-60 secondes`);
 });
