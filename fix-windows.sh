@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script de correction pour Windows
+# Script de correction pour Windows avec URLs spécifiques
 echo "🔧 Correction pour Windows..."
 
 # Vérifier si on est sur Windows
@@ -12,46 +12,42 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
     
     echo "📥 Téléchargement des binaires llama.cpp pour Windows..."
     
-    # URL des releases GitHub
-    RELEASE_URL="https://api.github.com/repos/ggerganov/llama.cpp/releases/latest"
+    # URL directe des binaires Windows
+    DOWNLOAD_URL="https://github.com/ggml-org/llama.cpp/releases/download/b5604/llama-b5604-bin-win-cpu-x64.zip"
     
-    # Obtenir l'URL de téléchargement du binaire Windows
-    DOWNLOAD_URL=$(curl -s "$RELEASE_URL" | grep "browser_download_url.*win.*x64.*zip" | cut -d '"' -f 4 | head -n 1)
+    echo "📦 Téléchargement depuis: $DOWNLOAD_URL"
     
-    if [ -n "$DOWNLOAD_URL" ]; then
-        echo "📦 Téléchargement depuis: $DOWNLOAD_URL"
+    # Télécharger
+    curl -L -o llama-cpp-windows.zip "$DOWNLOAD_URL"
+    
+    # Extraire dans le dossier llama.cpp
+    if command -v unzip &> /dev/null; then
+        unzip -o llama-cpp-windows.zip -d llama.cpp
+    elif command -v 7z &> /dev/null; then
+        7z x llama-cpp-windows.zip -ollama.cpp -y
+    else
+        echo "⚠️  Extraction manuelle requise"
+        echo "Veuillez extraire llama-cpp-windows.zip dans le dossier llama.cpp/"
+        exit 1
+    fi
+    
+    # Nettoyer
+    rm -f llama-cpp-windows.zip
+    
+    # Chercher l'exécutable (llama-cli.exe ou main.exe)
+    LLAMACLI_PATH=$(find llama.cpp -name "llama-cli.exe" -o -name "main.exe" -o -name "llama.exe" | head -n 1)
+    
+    if [ -n "$LLAMACLI_PATH" ]; then
+        echo "✅ Exécutable trouvé: $LLAMACLI_PATH"
         
-        # Télécharger
-        curl -L -o llama-cpp-windows.zip "$DOWNLOAD_URL"
+        # Mettre à jour la configuration avec le chemin Windows
+        WINDOWS_PATH=$(echo "$LLAMACLI_PATH" | sed 's|/|\\|g')
         
-        # Extraire dans le dossier llama.cpp
-        if command -v unzip &> /dev/null; then
-            unzip -o llama-cpp-windows.zip -d llama.cpp
-        elif command -v 7z &> /dev/null; then
-            7z x llama-cpp-windows.zip -ollama.cpp -y
-        else
-            echo "⚠️  Extraction manuelle requise"
-            echo "Veuillez extraire llama-cpp-windows.zip dans le dossier llama.cpp/"
-            exit 1
-        fi
-        
-        # Nettoyer
-        rm -f llama-cpp-windows.zip
-        
-        # Chercher l'exécutable
-        LLAMACLI_PATH=$(find llama.cpp -name "llama-cli.exe" -o -name "main.exe" -o -name "llama.exe" | head -n 1)
-        
-        if [ -n "$LLAMACLI_PATH" ]; then
-            echo "✅ Exécutable trouvé: $LLAMACLI_PATH"
-            
-            # Mettre à jour la configuration
-            FULL_PATH=$(realpath "$LLAMACLI_PATH")
-            
-            # Créer un nouveau config.json avec le bon chemin
-            cat > config.json << EOF
+        # Créer un nouveau config.json avec le bon chemin
+        cat > config.json << EOF
 {
   "port": 3000,
-  "llamaCppPath": "$FULL_PATH",
+  "llamaCppPath": "./$LLAMACLI_PATH",
   "modelPath": "./models/croissant.gguf",
   "maxTokens": 100,
   "temperature": 0.7,
@@ -71,17 +67,13 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
   }
 }
 EOF
-            
-            echo "✅ Configuration mise à jour"
-            echo "🚀 Vous pouvez maintenant démarrer le serveur avec: npm start"
-            
-        else
-            echo "❌ Aucun exécutable trouvé dans l'archive"
-            exit 1
-        fi
+        
+        echo "✅ Configuration mise à jour avec le chemin: ./$LLAMACLI_PATH"
         
     else
-        echo "❌ Impossible de trouver l'URL de téléchargement"
+        echo "❌ Aucun exécutable trouvé dans l'archive"
+        echo "📂 Contenu du dossier llama.cpp:"
+        ls -la llama.cpp/
         exit 1
     fi
     
@@ -95,17 +87,62 @@ if [ ! -f "models/croissant.gguf" ]; then
     echo "📥 Téléchargement du modèle CroissantLLM..."
     mkdir -p models
     
-    MODEL_URL="https://huggingface.co/croissantllm/CroissantLLMChat-v0.1-GGUF/resolve/main/croissant-llm-chat-v0.1.Q4_K_M.gguf"
+    # URL directe du modèle CroissantLLM
+    MODEL_URL="https://huggingface.co/croissantllm/CroissantLLMChat-v0.1-GGUF/resolve/main/croissantllmchat-v0.1.Q4_K_M.gguf?download=true"
+    
+    echo "📦 Téléchargement du modèle depuis HuggingFace..."
+    echo "⏳ Cela peut prendre plusieurs minutes (fichier ~2.4GB)..."
     
     if command -v wget &> /dev/null; then
-        wget -O "models/croissant.gguf" "$MODEL_URL"
+        wget -O "models/croissant.gguf" "$MODEL_URL" --progress=bar:force
     elif command -v curl &> /dev/null; then
-        curl -L -o "models/croissant.gguf" "$MODEL_URL"
+        curl -L -o "models/croissant.gguf" "$MODEL_URL" --progress-bar
     else
-        echo "⚠️  Veuillez télécharger manuellement le modèle depuis:"
+        echo "⚠️  wget ou curl requis pour télécharger le modèle"
+        echo "Veuillez télécharger manuellement le modèle depuis:"
         echo "$MODEL_URL"
         echo "Et le placer dans: models/croissant.gguf"
     fi
+    
+    # Vérifier la taille du fichier téléchargé
+    if [ -f "models/croissant.gguf" ]; then
+        SIZE=$(du -h "models/croissant.gguf" | cut -f1)
+        echo "✅ Modèle téléchargé avec succès (taille: $SIZE)"
+    fi
+else
+    echo "✅ Modèle déjà présent"
 fi
 
-echo "🎉 Configuration terminée !"
+# Test de l'installation
+echo "🧪 Test de la configuration..."
+if [ -f "$LLAMACLI_PATH" ] && [ -f "models/croissant.gguf" ]; then
+    echo "✅ Tous les fichiers sont présents"
+    
+    # Test rapide de llama.cpp
+    echo "🔍 Test de llama.cpp..."
+    timeout 5s "./$LLAMACLI_PATH" --help > /dev/null 2>&1
+    if [ $? -eq 0 ] || [ $? -eq 124 ]; then  # 124 = timeout (normal)
+        echo "✅ llama.cpp fonctionne correctement"
+    else
+        echo "⚠️  Test de llama.cpp partiellement réussi"
+    fi
+else
+    echo "⚠️  Certains fichiers manquent, vérifiez l'installation"
+fi
+
+echo
+echo "🎉 Configuration terminée pour Windows !"
+echo "========================================="
+echo
+echo "Pour démarrer le chatbot :"
+echo "  npm start"
+echo
+echo "URLs disponibles :"
+echo "  • Interface principale:  http://localhost:3000"
+echo "  • Version embeddable:    http://localhost:3000/embed"
+echo "  • Exemples:              http://localhost:3000/examples/example.html"
+echo
+echo "Configuration :"
+echo "  • Exécutable: ./$LLAMACLI_PATH"
+echo "  • Modèle: ./models/croissant.gguf"
+echo
