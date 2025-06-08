@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exemple d'intégration - Chatbot CroissantLLM</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f8f9fa;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        
+        .header p {
+            color: #7f8c8d;
+            font-size: 1.2rem;
+        }
+        
+        .examples {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 40px;
+            margin-bottom: 60px;
+        }
+        
+        .example {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .example h3 {
+            color: #4A90E2;
+            margin-bottom: 20px;
+        }
+        
+        .example p {
+            color: #666;
+            margin-bottom: 20px;
+        }
+        
+        .example-container {
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            color: #999;
+            min-height: 400px;
+            position: relative;
+        }
+        
+        .controls {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            margin-bottom: 40px;
+        }
+        
+        .controls h3 {
+            color: #4A90E2;
+            margin-bottom: 20px;
+        }
+        
+        .control-group {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        
+        .control-item {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        .control-item label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #555;
+        }
+        
+        .control-item input,
+        .control-item select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .control-item input:focus,
+        .control-item select:focus {
+            outline: none;
+            border-color: #4A90E2;
+        }
+        
+        button {
+            background: #4A90E2;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.2s;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background: #357ABD;
+        }
+        
+        button.secondary {
+            background: #95a5a6;
+        }
+        
+        button.secondary:hover {
+            background: #7f8c8d;
+        }
+        
+        .code-example {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+        
+        .floating-demo {
+            text-align: center;
+        }
+        
+        .floating-demo p {
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🥐 Exemples d'intégration Chatbot CroissantLLM</h1>
+            <p>Découvrez comment intégrer facilement le chatbot sur votre site web</p>
+        </div>
+
+        <div class="controls">
+            <h3>⚙️ Configuration du widget</h3>
+            <div class="control-group">
+                <div class="control-item">
+                    <label for="widget-title">Titre :</label>
+                    <input type="text" id="widget-title" value="Assistant CroissantLLM">
+                </div>
+                <div class="control-item">
+                    <label for="widget-placeholder">Placeholder :</label>
+                    <input type="text" id="widget-placeholder" value="Tapez votre message...">
+                </div>
+                <div class="control-item">
+                    <label for="widget-color">Couleur primaire :</label>
+                    <input type="color" id="widget-color" value="#4A90E2">
+                </div>
+            </div>
+            <div class="control-group">
+                <div class="control-item">
+                    <label for="widget-position">Position :</label>
+                    <select id="widget-position">
+                        <option value="bottom-right">Bas droite</option>
+                        <option value="bottom-left">Bas gauche</option>
+                        <option value="top-right">Haut droite</option>
+                        <option value="top-left">Haut gauche</option>
+                    </select>
+                </div>
+                <div class="control-item">
+                    <label for="widget-width">Largeur :</label>
+                    <input type="text" id="widget-width" value="400px">
+                </div>
+                <div class="control-item">
+                    <label for="widget-height">Hauteur :</label>
+                    <input type="text" id="widget-height" value="600px">
+                </div>
+            </div>
+            <button onclick="updateFloatingWidget()">Mettre à jour le widget</button>
+            <button onclick="toggleFloatingWidget()" class="secondary">Ouvrir/Fermer</button>
+            <button onclick="sendTestMessage()" class="secondary">Message test</button>
+        </div>
+
+        <div class="examples">
+            <div class="example">
+                <h3>📦 Widget intégré dans un conteneur</h3>
+                <p>Le chatbot s'intègre directement dans un conteneur de votre page.</p>
+                <div class="example-container" id="embedded-container">
+                    Le widget sera chargé ici
+                </div>
+                <button onclick="loadEmbeddedWidget()">Charger le widget</button>
+                <button onclick="clearEmbeddedWidget()" class="secondary">Vider</button>
+                
+                <div class="code-example">
+&lt;div id="chatbot-container"&gt;&lt;/div&gt;
+&lt;script src="http://localhost:3000/widget.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  ChatbotWidget.init({
+    container: '#chatbot-container',
+    title: 'Mon Assistant',
+    primaryColor: '#4A90E2'
+  });
+&lt;/script&gt;
+                </div>
+            </div>
+
+            <div class="example">
+                <h3>🎯 Widget flottant</h3>
+                <p>Un bouton flottant qui ouvre le chatbot par-dessus votre contenu.</p>
+                <div class="floating-demo">
+                    <p>Regardez en bas à droite de cette page !</p>
+                    <button onclick="initFloatingWidget()">Activer le widget flottant</button>
+                    <button onclick="destroyFloatingWidget()" class="secondary">Désactiver</button>
+                </div>
+                
+                <div class="code-example">
+&lt;script src="http://localhost:3000/widget.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  ChatbotWidget.init({
+    position: 'bottom-right',
+    title: 'Assistant IA',
+    primaryColor: '#27AE60'
+  });
+&lt;/script&gt;
+                </div>
+            </div>
+
+            <div class="example">
+                <h3>🔗 Iframe direct</h3>
+                <p>Intégration directe via iframe, simple et rapide.</p>
+                <div class="example-container">
+                    <iframe 
+                        src="http://localhost:3000/embed" 
+                        width="100%" 
+                        height="400"
+                        frameborder="0"
+                        style="border-radius: 8px;">
+                    </iframe>
+                </div>
+                
+                <div class="code-example">
+&lt;iframe 
+  src="http://localhost:3000/embed" 
+  width="400" 
+  height="600" 
+  frameborder="0"&gt;
+&lt;/iframe&gt;
+                </div>
+            </div>
+
+            <div class="example">
+                <h3>⚡ Auto-initialisation avec attributs data</h3>
+                <p>Configuration automatique via les attributs HTML.</p>
+                <div class="example-container" 
+                     data-chatbot-auto-init="true"
+                     data-chatbot-title="Assistant Auto"
+                     data-chatbot-primary-color="#E74C3C"
+                     data-chatbot-position="top-left">
+                    Auto-initialisation activée
+                </div>
+                
+                <div class="code-example">
+&lt;div data-chatbot-auto-init="true"
+     data-chatbot-title="Mon Assistant"
+     data-chatbot-primary-color="#E74C3C"
+     data-chatbot-position="bottom-left"&gt;
+&lt;/div&gt;
+&lt;script src="http://localhost:3000/widget.js"&gt;&lt;/script&gt;
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <h3>📊 API et événements</h3>
+            <p>Contrôlez le chatbot programmatiquement :</p>
+            <button onclick="demonstrateAPI()">Démonstration API</button>
+            <button onclick="getChatHistory()" class="secondary">Voir l'historique</button>
+            <button onclick="clearAllChats()" class="secondary">Vider tous les chats</button>
+            
+            <div class="code-example">
+// Envoyer un message
+ChatbotWidget.sendMessage("Bonjour !");
+
+// Effacer la conversation
+ChatbotWidget.clearChat();
+
+// Écouter les messages
+document.addEventListener('chatbot-message', (event) => {
+    console.log('Nouveau message:', event.detail);
+});
+
+// Mettre à jour la configuration
+ChatbotWidget.updateConfig({
+    title: 'Nouveau titre',
+    primaryColor: '#27AE60'
+});
+            </div>
+        </div>
+    </div>
+
+    <!-- Chargement du widget -->
+    <script src="http://localhost:3000/widget.js"></script>
+    
+    <script>
+        let embeddedWidget = null;
+        let floatingWidget = null;
+
+        // Widget intégré
+        function loadEmbeddedWidget() {
+            if (embeddedWidget) return;
+            
+            embeddedWidget = Object.create(ChatbotWidget);
+            embeddedWidget.init({
+                container: '#embedded-container',
+                title: 'Assistant Intégré',
+                primaryColor: '#9B59B6',
+                width: '100%',
+                height: '400px'
+            });
+        }
+
+        function clearEmbeddedWidget() {
+            if (embeddedWidget) {
+                embeddedWidget.destroy();
+                embeddedWidget = null;
+                document.getElementById('embedded-container').innerHTML = 'Le widget sera chargé ici';
+            }
+        }
+
+        // Widget flottant
+        function initFloatingWidget() {
+            if (floatingWidget) return;
+            
+            floatingWidget = Object.create(ChatbotWidget);
+            floatingWidget.init({
+                title: document.getElementById('widget-title').value,
+                placeholder: document.getElementById('widget-placeholder').value,
+                primaryColor: document.getElementById('widget-color').value,
+                position: document.getElementById('widget-position').value,
+                width: document.getElementById('widget-width').value,
+                height: document.getElementById('widget-height').value
+            });
+        }
+
+        function destroyFloatingWidget() {
+            if (floatingWidget) {
+                floatingWidget.destroy();
+                floatingWidget = null;
+            }
+        }
+
+        function updateFloatingWidget() {
+            if (floatingWidget) {
+                floatingWidget.updateConfig({
+                    title: document.getElementById('widget-title').value,
+                    placeholder: document.getElementById('widget-placeholder').value,
+                    primaryColor: document.getElementById('widget-color').value
+                });
+            }
+        }
+
+        function toggleFloatingWidget() {
+            if (floatingWidget) {
+                floatingWidget.toggle();
+            } else {
+                alert('Veuillez d\'abord activer le widget flottant');
+            }
+        }
+
+        function sendTestMessage() {
+            if (floatingWidget) {
+                floatingWidget.sendMessage('Bonjour ! Ceci est un message test envoyé via l\'API.');
+                if (!floatingWidget.isOpen) {
+                    floatingWidget.open();
+                }
+            } else {
+                alert('Veuillez d\'abord activer le widget flottant');
+            }
+        }
+
+        // API démonstration
+        function demonstrateAPI() {
+            const messages = [
+                'Bonjour !',
+                'Comment ça va ?',
+                'Pouvez-vous m\'aider ?',
+                'Merci beaucoup !'
+            ];
+            
+            let index = 0;
+            
+            if (!floatingWidget) {
+                initFloatingWidget();
+                setTimeout(() => {
+                    floatingWidget.open();
+                    sendNextMessage();
+                }, 1000);
+            } else {
+                floatingWidget.open();
+                sendNextMessage();
+            }
+            
+            function sendNextMessage() {
+                if (index < messages.length) {
+                    setTimeout(() => {
+                        floatingWidget.sendMessage(messages[index]);
+                        index++;
+                        sendNextMessage();
+                    }, 2000);
+                }
+            }
+        }
+
+        function getChatHistory() {
+            if (floatingWidget && floatingWidget.iframe && floatingWidget.iframe.contentWindow.ChatbotEmbed) {
+                const history = floatingWidget.iframe.contentWindow.ChatbotEmbed.getHistory();
+                console.log('Historique du chat:', history);
+                alert(`Historique récupéré ! Voir la console (${history.length} messages)`);
+            } else {
+                alert('Aucun widget actif trouvé');
+            }
+        }
+
+        function clearAllChats() {
+            if (embeddedWidget) {
+                embeddedWidget.clearChat();
+            }
+            if (floatingWidget) {
+                floatingWidget.clearChat();
+            }
+            alert('Tous les chats ont été vidés');
+        }
+
+        // Écouter les événements du chatbot
+        document.addEventListener('chatbot-message', (event) => {
+            console.log('Message reçu:', event.detail);
+        });
+
+        // Initialiser le widget flottant au chargement
+        setTimeout(() => {
+            initFloatingWidget();
+        }, 1000);
+    </script>
+</body>
+</html>
