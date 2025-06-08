@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot CroissantLLM</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="chat-container">
+            <div class="chat-header">
+                <h1 id="chat-title">Assistant CroissantLLM</h1>
+                <div class="status-indicator">
+                    <span class="status-dot" id="status-dot"></span>
+                    <span id="status-text">Connexion...</span>
+                </div>
+            </div>
+            
+            <div class="chat-messages" id="chat-messages">
+                <div class="message bot-message">
+                    <div class="message-content">
+                        Bonjour ! Je suis votre assistant basé sur CroissantLLM. Comment puis-je vous aider aujourd'hui ?
+                    </div>
+                    <div class="message-time" id="initial-time"></div>
+                </div>
+            </div>
+            
+            <div class="typing-indicator" id="typing-indicator" style="display: none;">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+            
+            <div class="chat-input-container">
+                <div class="input-wrapper">
+                    <textarea 
+                        id="chat-input" 
+                        placeholder="Tapez votre message en français..."
+                        rows="1"
+                        maxlength="1000"
+                    ></textarea>
+                    <button id="send-button" type="button">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22,2 15,22 11,13 2,9"></polygon>
+                        </svg>
+                    </button>
+                </div>
+                <div class="input-info">
+                    <span id="char-count">0/1000</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <h3>Configuration</h3>
+                <div class="config-item">
+                    <label for="temperature">Créativité:</label>
+                    <input type="range" id="temperature" min="0.1" max="1.0" step="0.1" value="0.7">
+                    <span id="temperature-value">0.7</span>
+                </div>
+                <div class="config-item">
+                    <label for="max-tokens">Longueur max:</label>
+                    <input type="range" id="max-tokens" min="50" max="300" step="10" value="100">
+                    <span id="max-tokens-value">100</span>
+                </div>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>Actions</h3>
+                <button id="clear-chat" class="action-button">Effacer la conversation</button>
+                <button id="export-chat" class="action-button">Exporter en JSON</button>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>Statistiques</h3>
+                <div class="stat-item">
+                    <span>Messages envoyés:</span>
+                    <span id="message-count">0</span>
+                </div>
+                <div class="stat-item">
+                    <span>Temps de réponse moyen:</span>
+                    <span id="avg-response-time">0ms</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration globale
+        let config = {
+            chatbot: {
+                title: 'Assistant CroissantLLM',
+                placeholder: 'Tapez votre message en français...',
+                primaryColor: '#4A90E2',
+                maxMessages: 50
+            }
+        };
+        
+        let chatHistory = [];
+        let messageCount = 0;
+        let responseTimes = [];
+        
+        // Éléments DOM
+        const chatMessages = document.getElementById('chat-messages');
+        const chatInput = document.getElementById('chat-input');
+        const sendButton = document.getElementById('send-button');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+        const charCount = document.getElementById('char-count');
+        
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadConfig();
+            setupEventListeners();
+            updateStatus('online');
+            updateInitialTime();
+            autoResize();
+        });
+        
+        // Charger la configuration
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/config');
+                const serverConfig = await response.json();
+                config = { ...config, ...serverConfig };
+                
+                // Appliquer la configuration
+                document.getElementById('chat-title').textContent = config.chatbot.title;
+                chatInput.placeholder = config.chatbot.placeholder;
+                
+                // Appliquer les couleurs
+                document.documentElement.style.setProperty('--primary-color', config.chatbot.primaryColor);
+            } catch (error) {
+                console.error('Erreur lors du chargement de la configuration:', error);
+            }
+        }
+        
+        // Configuration des événements
+        function setupEventListeners() {
+            sendButton.addEventListener('click', sendMessage);
+            chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+            
+            chatInput.addEventListener('input', () => {
+                autoResize();
+                updateCharCount();
+            });
+            
+            // Configuration sidebar
+            document.getElementById('temperature').addEventListener('input', (e) => {
+                document.getElementById('temperature-value').textContent = e.target.value;
+            });
+            
+            document.getElementById('max-tokens').addEventListener('input', (e) => {
+                document.getElementById('max-tokens-value').textContent = e.target.value;
+            });
+            
+            document.getElementById('clear-chat').addEventListener('click', clearChat);
+            document.getElementById('export-chat').addEventListener('click', exportChat);
+        }
+        
+        // Envoyer un message
+        async function sendMessage() {
+            const message = chatInput.value.trim();
+            if (!message) return;
+            
+            // Ajouter le message utilisateur
+            addMessage(message, 'user');
+            chatInput.value = '';
+            autoResize();
+            updateCharCount();
+            
+            // Afficher l'indicateur de frappe
+            showTyping();
+            
+            const startTime = Date.now();
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        history: chatHistory.slice(-10) // Garder seulement les 10 derniers messages
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const responseTime = Date.now() - startTime;
+                    responseTimes.push(responseTime);
+                    updateStats();
+                    
+                    hideTyping();
+                    addMessage(data.response, 'bot');
+                } else {
+                    hideTyping();
+                    addMessage('Désolé, une erreur est survenue: ' + data.error, 'error');
+                }
+                
+            } catch (error) {
+                hideTyping();
+                addMessage('Erreur de connexion au serveur', 'error');
+                console.error('Erreur:', error);
+            }
+        }
+        
+        // Ajouter un message à la conversation
+        function addMessage(content, type) {
+            messageCount++;
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = content;
+            
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = new Date().toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            messageDiv.appendChild(contentDiv);
+            messageDiv.appendChild(timeDiv);
+            
+            // Ajouter à l'historique
+            chatHistory.push({
+                content: content,
+                type: type === 'user' ? 'user' : 'bot',
+                timestamp: Date.now()
+            });
+            
+            // Limiter l'historique
+            if (chatHistory.length > config.chatbot.maxMessages) {
+                chatHistory = chatHistory.slice(-config.chatbot.maxMessages);
+            }
+            
+            chatMessages.appendChild(messageDiv);
+            scrollToBottom();
+            
+            document.getElementById('message-count').textContent = messageCount;
+        }
+        
+        // Utilitaires
+        function showTyping() {
+            typingIndicator.style.display = 'flex';
+            scrollToBottom();
+        }
+        
+        function hideTyping() {
+            typingIndicator.style.display = 'none';
+        }
+        
+        function scrollToBottom() {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        function autoResize() {
+            chatInput.style.height = 'auto';
+            chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+        }
+        
+        function updateCharCount() {
+            const count = chatInput.value.length;
+            charCount.textContent = `${count}/1000`;
+            charCount.style.color = count > 900 ? '#e74c3c' : '#7f8c8d';
+        }
+        
+        function updateStatus(status) {
+            statusDot.className = `status-dot ${status}`;
+            statusText.textContent = status === 'online' ? 'En ligne' : 'Hors ligne';
+        }
+        
+        function updateInitialTime() {
+            document.getElementById('initial-time').textContent = new Date().toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+        
+        function updateStats() {
+            const avgTime = responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length;
+            document.getElementById('avg-response-time').textContent = Math.round(avgTime) + 'ms';
+        }
+        
+        function clearChat() {
+            if (confirm('Êtes-vous sûr de vouloir effacer la conversation ?')) {
+                chatMessages.innerHTML = `
+                    <div class="message bot-message">
+                        <div class="message-content">
+                            Conversation effacée. Comment puis-je vous aider ?
+                        </div>
+                        <div class="message-time">${new Date().toLocaleTimeString('fr-FR', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        })}</div>
+                    </div>
+                `;
+                chatHistory = [];
+                messageCount = 0;
+                responseTimes = [];
+                document.getElementById('message-count').textContent = '0';
+                document.getElementById('avg-response-time').textContent = '0ms';
+            }
+        }
+        
+        function exportChat() {
+            const exportData = {
+                timestamp: new Date().toISOString(),
+                messages: chatHistory,
+                stats: {
+                    messageCount: messageCount,
+                    averageResponseTime: responseTimes.length > 0 ? 
+                        Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length) : 0
+                }
+            };
+            
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+                type: 'application/json'
+            });
+            
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `chat-export-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
