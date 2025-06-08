@@ -33,12 +33,19 @@ app.get('/api/config', (req, res) => {
 });
 
 // Fonction pour formater le prompt selon le template
-function formatPrompt(message, history, templateType) {
+function formatPrompt(message, history, templateType, systemPrompt = null) {
     let prompt = '';
     
     switch (templateType) {
         case 'vigogne_chat':
             // Template Vigogne Chat: <|UTILISATEUR|>: ... <|ASSISTANT|>:
+            
+            // Ajouter le contexte système si fourni
+            if (systemPrompt) {
+                prompt += `<|ASSISTANT|>: ${systemPrompt}\n\n`;
+            }
+            
+            // Ajouter l'historique
             if (history.length > 0) {
                 history.forEach(msg => {
                     if (msg.type === 'user') {
@@ -53,12 +60,23 @@ function formatPrompt(message, history, templateType) {
             
         case 'vigogne_instruct':
             // Template Vigogne Instruct: ### Instruction: ... ### Response:
-            prompt = `Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n${message}\n\n### Response:`;
+            let instruction = message;
+            if (systemPrompt) {
+                instruction = `${systemPrompt}\n\n${message}`;
+            }
+            prompt = `Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n${instruction}\n\n### Response:`;
             break;
             
         case 'chatml':
         default:
             // Template ChatML (Qwen, CroissantLLM): <|im_start|>user ... <|im_end|>
+            
+            // Ajouter le contexte système si fourni
+            if (systemPrompt) {
+                prompt += `<|im_start|>system\n${systemPrompt}<|im_end|>\n`;
+            }
+            
+            // Ajouter l'historique
             if (history.length > 0) {
                 history.forEach(msg => {
                     if (msg.type === 'user') {
@@ -123,6 +141,58 @@ function cleanOutput(output, templateType) {
     return cleanOutput;
 }
 
+// Route pour définir le contexte système
+app.post('/api/context', (req, res) => {
+    try {
+        const { context } = req.body;
+        
+        // Sauvegarder le contexte dans un fichier temporaire
+        const contextData = {
+            context: context || '',
+            timestamp: new Date().toISOString()
+        };
+        
+        fs.writeFileSync('./context.json', JSON.stringify(contextData, null, 2));
+        
+        res.json({ 
+            status: 'success',
+            message: 'Contexte mis à jour',
+            context: context
+        });
+        
+    } catch (error) {
+        console.error('Erreur lors de la mise à jour du contexte:', error);
+        res.status(500).json({ 
+            error: 'Erreur lors de la mise à jour du contexte',
+            details: error.message 
+        });
+    }
+});
+
+// Route pour récupérer le contexte actuel
+app.get('/api/context', (req, res) => {
+    try {
+        let context = '';
+        
+        if (fs.existsSync('./context.json')) {
+            const contextData = JSON.parse(fs.readFileSync('./context.json', 'utf8'));
+            context = contextData.context || '';
+        }
+        
+        res.json({ 
+            status: 'success',
+            context: context
+        });
+        
+    } catch (error) {
+        console.error('Erreur lors de la lecture du contexte:', error);
+        res.json({ 
+            status: 'success',
+            context: ''
+        });
+    }
+});
+
 // Route principale du chat
 app.post('/api/chat', async (req, res) => {
     try {
@@ -132,13 +202,25 @@ app.post('/api/chat', async (req, res) => {
             return res.status(400).json({ error: 'Message requis' });
         }
 
+        // Récupérer le contexte système
+        let systemPrompt = null;
+        if (fs.existsSync('./context.json')) {
+            try {
+                const contextData = JSON.parse(fs.readFileSync('./context.json', 'utf8'));
+                systemPrompt = contextData.context || null;
+            } catch (error) {
+                console.log('Pas de contexte système défini');
+            }
+        }
+
         // Déterminer le type de template
         const templateType = config.templateType || 'chatml';
         
         // Construire le prompt selon le template
-        const prompt = formatPrompt(message, history, templateType);
+        const prompt = formatPrompt(message, history, templateType, systemPrompt);
 
         console.log('Template utilisé:', templateType);
+        console.log('Contexte système:', systemPrompt ? 'Défini' : 'Non défini');
         console.log('Prompt envoyé:', prompt);
 
         // Appeler llama.cpp
@@ -147,7 +229,8 @@ app.post('/api/chat', async (req, res) => {
         res.json({ 
             response: response.trim(),
             status: 'success',
-            template: templateType
+            template: templateType,
+            hasContext: !!systemPrompt
         });
 
     } catch (error) {
@@ -252,6 +335,7 @@ app.listen(PORT, () => {
     console.log(`🤖 Modèle: ${modelName}`);
     console.log(`⚙️  llama.cpp: ${config.llamaCppPath}`);
     console.log(`📝 Template: ${templateType}`);
+    console.log(`🎯 Contexte système: Disponible via l'interface`);
     console.log(`⏰ Timeout: 90 secondes`);
     console.log(`🧹 Nettoyage automatique des tokens de fin`);
     console.log(`💬 Première génération peut prendre 30-60 secondes`);
