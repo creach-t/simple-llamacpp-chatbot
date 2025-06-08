@@ -3,334 +3,369 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chatbot CroissantLLM</title>
+    <title>Assistant IA</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
-        <div class="chat-container">
-            <div class="chat-header">
-                <h1 id="chat-title">Assistant CroissantLLM</h1>
-                <div class="status-indicator">
-                    <span class="status-dot" id="status-dot"></span>
-                    <span id="status-text">Connexion...</span>
-                </div>
+        <!-- Sidebar Configuration -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h3>⚙️ Configuration</h3>
+                <button class="close-btn" onclick="toggleSidebar()">×</button>
             </div>
             
-            <div class="chat-messages" id="chat-messages">
-                <div class="message bot-message">
-                    <div class="message-content">
-                        Bonjour ! Je suis votre assistant basé sur CroissantLLM. Comment puis-je vous aider aujourd'hui ?
-                    </div>
-                    <div class="message-time" id="initial-time"></div>
-                </div>
-            </div>
-            
-            <div class="typing-indicator" id="typing-indicator" style="display: none;">
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-            </div>
-            
-            <div class="chat-input-container">
-                <div class="input-wrapper">
+            <div class="sidebar-content">
+                <!-- Section Contexte Système -->
+                <div class="config-section">
+                    <h4>🎯 Contexte Système</h4>
+                    <p class="config-description">
+                        Définissez le rôle et le comportement de l'assistant
+                    </p>
                     <textarea 
-                        id="chat-input" 
-                        placeholder="Tapez votre message en français..."
-                        rows="1"
-                        maxlength="1000"
+                        id="systemContext" 
+                        placeholder="Ex: Tu es un assistant spécialisé en programmation. Réponds toujours avec des exemples de code..."
+                        rows="4"
                     ></textarea>
-                    <button id="send-button" type="button">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="22" y1="2" x2="11" y2="13"></line>
-                            <polygon points="22,2 15,22 11,13 2,9"></polygon>
-                        </svg>
-                    </button>
+                    <button onclick="saveContext()">💾 Sauvegarder Contexte</button>
+                    <button onclick="clearContext()">🗑️ Effacer</button>
+                    <div id="contextStatus" class="status-message"></div>
                 </div>
-                <div class="input-info">
-                    <span id="char-count">0/1000</span>
+
+                <!-- Section Paramètres de Chat -->
+                <div class="config-section">
+                    <h4>💬 Paramètres</h4>
+                    <div class="param-group">
+                        <label for="temperature">🌡️ Créativité (Temperature):</label>
+                        <input type="range" id="temperature" min="0.1" max="1.0" step="0.1" value="0.7">
+                        <span id="tempValue">0.7</span>
+                    </div>
+                    <div class="param-group">
+                        <label for="maxTokens">📝 Longueur max (Tokens):</label>
+                        <input type="range" id="maxTokens" min="50" max="500" step="25" value="150">
+                        <span id="tokensValue">150</span>
+                    </div>
+                </div>
+
+                <!-- Section Thèmes -->
+                <div class="config-section">
+                    <h4>🎨 Thème</h4>
+                    <div class="theme-buttons">
+                        <button onclick="setTheme('blue')" class="theme-btn blue">Bleu</button>
+                        <button onclick="setTheme('green')" class="theme-btn green">Vert</button>
+                        <button onclick="setTheme('purple')" class="theme-btn purple">Violet</button>
+                        <button onclick="setTheme('dark')" class="theme-btn dark">Sombre</button>
+                    </div>
+                </div>
+
+                <!-- Section Actions -->
+                <div class="config-section">
+                    <h4>🔄 Actions</h4>
+                    <button onclick="clearHistory()" class="action-btn">🗑️ Effacer Historique</button>
+                    <button onclick="exportChat()" class="action-btn">📥 Exporter Chat</button>
+                </div>
+
+                <!-- Section Info -->
+                <div class="config-section">
+                    <h4>ℹ️ Informations</h4>
+                    <div class="info-item">
+                        <span>Modèle:</span>
+                        <span id="modelInfo">Chargement...</span>
+                    </div>
+                    <div class="info-item">
+                        <span>Template:</span>
+                        <span id="templateInfo">Chargement...</span>
+                    </div>
+                    <div class="info-item">
+                        <span>Contexte:</span>
+                        <span id="contextInfo">Non défini</span>
+                    </div>
                 </div>
             </div>
         </div>
-        
-        <div class="sidebar">
-            <div class="sidebar-section">
-                <h3>Configuration</h3>
-                <div class="config-item">
-                    <label for="temperature">Créativité:</label>
-                    <input type="range" id="temperature" min="0.1" max="1.0" step="0.1" value="0.7">
-                    <span id="temperature-value">0.7</span>
-                </div>
-                <div class="config-item">
-                    <label for="max-tokens">Longueur max:</label>
-                    <input type="range" id="max-tokens" min="50" max="300" step="10" value="100">
-                    <span id="max-tokens-value">100</span>
+
+        <!-- Zone de Chat Principal -->
+        <div class="chat-container">
+            <div class="chat-header">
+                <button class="config-btn" onclick="toggleSidebar()">⚙️</button>
+                <h1 id="chatTitle">Assistant IA</h1>
+                <div class="status-indicator" id="statusIndicator">●</div>
+            </div>
+
+            <div class="chat-messages" id="chatMessages">
+                <div class="message bot-message">
+                    <div class="message-content">
+                        <p>👋 Bonjour ! Je suis votre assistant IA. Comment puis-je vous aider aujourd'hui ?</p>
+                        <small class="message-time" id="welcomeTime"></small>
+                    </div>
                 </div>
             </div>
-            
-            <div class="sidebar-section">
-                <h3>Actions</h3>
-                <button id="clear-chat" class="action-button">Effacer la conversation</button>
-                <button id="export-chat" class="action-button">Exporter en JSON</button>
-            </div>
-            
-            <div class="sidebar-section">
-                <h3>Statistiques</h3>
-                <div class="stat-item">
-                    <span>Messages envoyés:</span>
-                    <span id="message-count">0</span>
-                </div>
-                <div class="stat-item">
-                    <span>Temps de réponse moyen:</span>
-                    <span id="avg-response-time">0ms</span>
+
+            <div class="chat-input-container">
+                <div class="chat-input">
+                    <textarea 
+                        id="messageInput" 
+                        placeholder="Tapez votre message..." 
+                        rows="1"
+                        onkeypress="handleKeyPress(event)"
+                    ></textarea>
+                    <button id="sendButton" onclick="sendMessage()">
+                        <span id="sendIcon">➤</span>
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Configuration globale
-        let config = {
-            chatbot: {
-                title: 'Assistant CroissantLLM',
-                placeholder: 'Tapez votre message en français...',
-                primaryColor: '#4A90E2',
-                maxMessages: 50
-            }
-        };
-        
         let chatHistory = [];
-        let messageCount = 0;
-        let responseTimes = [];
-        
-        // Éléments DOM
-        const chatMessages = document.getElementById('chat-messages');
-        const chatInput = document.getElementById('chat-input');
-        const sendButton = document.getElementById('send-button');
-        const typingIndicator = document.getElementById('typing-indicator');
-        const statusDot = document.getElementById('status-dot');
-        const statusText = document.getElementById('status-text');
-        const charCount = document.getElementById('char-count');
-        
+        let isLoading = false;
+        let config = {};
+
         // Initialisation
-        document.addEventListener('DOMContentLoaded', async () => {
-            await loadConfig();
-            setupEventListeners();
-            updateStatus('online');
-            updateInitialTime();
-            autoResize();
+        document.addEventListener('DOMContentLoaded', function() {
+            loadConfig();
+            loadContext();
+            updateWelcomeTime();
+            setupParameterListeners();
         });
-        
+
         // Charger la configuration
         async function loadConfig() {
             try {
                 const response = await fetch('/api/config');
-                const serverConfig = await response.json();
-                config = { ...config, ...serverConfig };
+                config = await response.json();
                 
-                // Appliquer la configuration
-                document.getElementById('chat-title').textContent = config.chatbot.title;
-                chatInput.placeholder = config.chatbot.placeholder;
-                
-                // Appliquer les couleurs
-                document.documentElement.style.setProperty('--primary-color', config.chatbot.primaryColor);
+                if (config.chatbot) {
+                    document.getElementById('chatTitle').textContent = config.chatbot.title || 'Assistant IA';
+                    document.querySelector('#messageInput').placeholder = config.chatbot.placeholder || 'Tapez votre message...';
+                    
+                    // Appliquer les couleurs
+                    if (config.chatbot.primaryColor) {
+                        document.documentElement.style.setProperty('--primary-color', config.chatbot.primaryColor);
+                    }
+                }
             } catch (error) {
                 console.error('Erreur lors du chargement de la configuration:', error);
             }
         }
-        
-        // Configuration des événements
-        function setupEventListeners() {
-            sendButton.addEventListener('click', sendMessage);
-            chatInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
+
+        // Charger le contexte système
+        async function loadContext() {
+            try {
+                const response = await fetch('/api/context');
+                const data = await response.json();
+                
+                if (data.status === 'success' && data.context) {
+                    document.getElementById('systemContext').value = data.context;
+                    document.getElementById('contextInfo').textContent = 'Défini';
+                } else {
+                    document.getElementById('contextInfo').textContent = 'Non défini';
                 }
-            });
-            
-            chatInput.addEventListener('input', () => {
-                autoResize();
-                updateCharCount();
-            });
-            
-            // Configuration sidebar
-            document.getElementById('temperature').addEventListener('input', (e) => {
-                document.getElementById('temperature-value').textContent = e.target.value;
-            });
-            
-            document.getElementById('max-tokens').addEventListener('input', (e) => {
-                document.getElementById('max-tokens-value').textContent = e.target.value;
-            });
-            
-            document.getElementById('clear-chat').addEventListener('click', clearChat);
-            document.getElementById('export-chat').addEventListener('click', exportChat);
+            } catch (error) {
+                console.error('Erreur lors du chargement du contexte:', error);
+            }
         }
-        
+
+        // Sauvegarder le contexte système
+        async function saveContext() {
+            const context = document.getElementById('systemContext').value.trim();
+            const statusElement = document.getElementById('contextStatus');
+            
+            try {
+                const response = await fetch('/api/context', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ context: context })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    statusElement.textContent = '✅ Contexte sauvegardé !';
+                    statusElement.className = 'status-message success';
+                    document.getElementById('contextInfo').textContent = context ? 'Défini' : 'Non défini';
+                    
+                    setTimeout(() => {
+                        statusElement.textContent = '';
+                        statusElement.className = 'status-message';
+                    }, 3000);
+                } else {
+                    throw new Error(data.message || 'Erreur inconnue');
+                }
+            } catch (error) {
+                statusElement.textContent = '❌ Erreur : ' + error.message;
+                statusElement.className = 'status-message error';
+            }
+        }
+
+        // Effacer le contexte
+        async function clearContext() {
+            document.getElementById('systemContext').value = '';
+            await saveContext();
+        }
+
+        // Configuration des listeners pour les paramètres
+        function setupParameterListeners() {
+            const tempSlider = document.getElementById('temperature');
+            const tempValue = document.getElementById('tempValue');
+            const tokensSlider = document.getElementById('maxTokens');
+            const tokensValue = document.getElementById('tokensValue');
+
+            tempSlider.addEventListener('input', function() {
+                tempValue.textContent = this.value;
+            });
+
+            tokensSlider.addEventListener('input', function() {
+                tokensValue.textContent = this.value;
+            });
+        }
+
+        // Gestion de la sidebar
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('open');
+        }
+
         // Envoyer un message
         async function sendMessage() {
-            const message = chatInput.value.trim();
-            if (!message) return;
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
             
-            // Ajouter le message utilisateur
+            if (!message || isLoading) return;
+            
+            // Ajouter le message de l'utilisateur
             addMessage(message, 'user');
-            chatInput.value = '';
-            autoResize();
-            updateCharCount();
+            input.value = '';
             
-            // Afficher l'indicateur de frappe
-            showTyping();
-            
-            const startTime = Date.now();
+            // Mettre en mode chargement
+            setLoading(true);
             
             try {
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
                         message: message,
-                        history: chatHistory.slice(-10) // Garder seulement les 10 derniers messages
+                        history: chatHistory
                     })
                 });
                 
                 const data = await response.json();
                 
-                if (response.ok) {
-                    const responseTime = Date.now() - startTime;
-                    responseTimes.push(responseTime);
-                    updateStats();
-                    
-                    hideTyping();
+                if (data.status === 'success') {
                     addMessage(data.response, 'bot');
+                    
+                    // Mettre à jour les infos si disponibles
+                    if (data.template) {
+                        document.getElementById('templateInfo').textContent = data.template;
+                    }
                 } else {
-                    hideTyping();
-                    addMessage('Désolé, une erreur est survenue: ' + data.error, 'error');
+                    addMessage('Désolé, une erreur est survenue : ' + (data.error || 'Erreur inconnue'), 'bot', true);
                 }
-                
             } catch (error) {
-                hideTyping();
-                addMessage('Erreur de connexion au serveur', 'error');
                 console.error('Erreur:', error);
+                addMessage('Erreur de connexion au serveur.', 'bot', true);
+            } finally {
+                setLoading(false);
             }
         }
-        
-        // Ajouter un message à la conversation
-        function addMessage(content, type) {
-            messageCount++;
-            
+
+        // Ajouter un message à l'historique
+        function addMessage(content, type, isError = false) {
+            const messagesContainer = document.getElementById('chatMessages');
             const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${type}-message`;
+            messageDiv.className = `message ${type}-message ${isError ? 'error' : ''}`;
             
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'message-content';
-            contentDiv.textContent = content;
-            
-            const timeDiv = document.createElement('div');
-            timeDiv.className = 'message-time';
-            timeDiv.textContent = new Date().toLocaleTimeString('fr-FR', {
-                hour: '2-digit',
-                minute: '2-digit'
+            const time = new Date().toLocaleTimeString('fr-FR', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
             });
             
-            messageDiv.appendChild(contentDiv);
-            messageDiv.appendChild(timeDiv);
+            messageDiv.innerHTML = `
+                <div class="message-content">
+                    <p>${content.replace(/\n/g, '<br>')}</p>
+                    <small class="message-time">${time}</small>
+                </div>
+            `;
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
             
             // Ajouter à l'historique
-            chatHistory.push({
-                content: content,
-                type: type === 'user' ? 'user' : 'bot',
-                timestamp: Date.now()
-            });
-            
-            // Limiter l'historique
-            if (chatHistory.length > config.chatbot.maxMessages) {
-                chatHistory = chatHistory.slice(-config.chatbot.maxMessages);
+            if (!isError) {
+                chatHistory.push({
+                    type: type,
+                    content: content,
+                    timestamp: new Date().toISOString()
+                });
+                
+                // Limiter l'historique
+                const maxMessages = config.chatbot?.maxMessages || 50;
+                if (chatHistory.length > maxMessages) {
+                    chatHistory = chatHistory.slice(-maxMessages);
+                }
             }
+        }
+
+        // Gestion de l'état de chargement
+        function setLoading(loading) {
+            isLoading = loading;
+            const sendButton = document.getElementById('sendButton');
+            const sendIcon = document.getElementById('sendIcon');
+            const statusIndicator = document.getElementById('statusIndicator');
             
-            chatMessages.appendChild(messageDiv);
-            scrollToBottom();
-            
-            document.getElementById('message-count').textContent = messageCount;
+            if (loading) {
+                sendIcon.textContent = '⏳';
+                sendButton.disabled = true;
+                statusIndicator.className = 'status-indicator loading';
+            } else {
+                sendIcon.textContent = '➤';
+                sendButton.disabled = false;
+                statusIndicator.className = 'status-indicator';
+            }
         }
-        
-        // Utilitaires
-        function showTyping() {
-            typingIndicator.style.display = 'flex';
-            scrollToBottom();
+
+        // Gestion des touches
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
         }
-        
-        function hideTyping() {
-            typingIndicator.style.display = 'none';
-        }
-        
-        function scrollToBottom() {
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-        
-        function autoResize() {
-            chatInput.style.height = 'auto';
-            chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
-        }
-        
-        function updateCharCount() {
-            const count = chatInput.value.length;
-            charCount.textContent = `${count}/1000`;
-            charCount.style.color = count > 900 ? '#e74c3c' : '#7f8c8d';
-        }
-        
-        function updateStatus(status) {
-            statusDot.className = `status-dot ${status}`;
-            statusText.textContent = status === 'online' ? 'En ligne' : 'Hors ligne';
-        }
-        
-        function updateInitialTime() {
-            document.getElementById('initial-time').textContent = new Date().toLocaleTimeString('fr-FR', {
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        }
-        
-        function updateStats() {
-            const avgTime = responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length;
-            document.getElementById('avg-response-time').textContent = Math.round(avgTime) + 'ms';
-        }
-        
-        function clearChat() {
-            if (confirm('Êtes-vous sûr de vouloir effacer la conversation ?')) {
-                chatMessages.innerHTML = `
+
+        // Effacer l'historique
+        function clearHistory() {
+            if (confirm('Êtes-vous sûr de vouloir effacer tout l\'historique ?')) {
+                chatHistory = [];
+                const messagesContainer = document.getElementById('chatMessages');
+                messagesContainer.innerHTML = `
                     <div class="message bot-message">
                         <div class="message-content">
-                            Conversation effacée. Comment puis-je vous aider ?
+                            <p>👋 Historique effacé ! Comment puis-je vous aider ?</p>
+                            <small class="message-time">${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</small>
                         </div>
-                        <div class="message-time">${new Date().toLocaleTimeString('fr-FR', {
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        })}</div>
                     </div>
                 `;
-                chatHistory = [];
-                messageCount = 0;
-                responseTimes = [];
-                document.getElementById('message-count').textContent = '0';
-                document.getElementById('avg-response-time').textContent = '0ms';
             }
         }
-        
+
+        // Exporter le chat
         function exportChat() {
-            const exportData = {
+            const chatData = {
                 timestamp: new Date().toISOString(),
-                messages: chatHistory,
-                stats: {
-                    messageCount: messageCount,
-                    averageResponseTime: responseTimes.length > 0 ? 
-                        Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length) : 0
-                }
+                model: document.getElementById('modelInfo').textContent,
+                template: document.getElementById('templateInfo').textContent,
+                context: document.getElementById('systemContext').value,
+                history: chatHistory
             };
             
-            const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-                type: 'application/json'
+            const blob = new Blob([JSON.stringify(chatData, null, 2)], { 
+                type: 'application/json' 
             });
             
             const url = URL.createObjectURL(blob);
@@ -339,6 +374,29 @@
             a.download = `chat-export-${new Date().toISOString().split('T')[0]}.json`;
             a.click();
             URL.revokeObjectURL(url);
+        }
+
+        // Changer le thème
+        function setTheme(theme) {
+            document.body.className = theme + '-theme';
+            localStorage.setItem('chatTheme', theme);
+        }
+
+        // Charger le thème sauvegardé
+        const savedTheme = localStorage.getItem('chatTheme');
+        if (savedTheme) {
+            setTheme(savedTheme);
+        }
+
+        // Mettre à jour l'heure de bienvenue
+        function updateWelcomeTime() {
+            const welcomeTime = document.getElementById('welcomeTime');
+            if (welcomeTime) {
+                welcomeTime.textContent = new Date().toLocaleTimeString('fr-FR', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+            }
         }
     </script>
 </body>
