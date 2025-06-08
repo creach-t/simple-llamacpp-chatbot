@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot CroissantLLM - Embed</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="embed-container">
+    <div class="container">
+        <div class="chat-container">
+            <div class="chat-header">
+                <h1 id="chat-title">Assistant CroissantLLM</h1>
+                <div class="status-indicator">
+                    <span class="status-dot" id="status-dot"></span>
+                    <span id="status-text">Connexion...</span>
+                </div>
+            </div>
+            
+            <div class="chat-messages" id="chat-messages">
+                <div class="message bot-message">
+                    <div class="message-content">
+                        Bonjour ! Je suis votre assistant basé sur CroissantLLM. Comment puis-je vous aider aujourd'hui ?
+                    </div>
+                    <div class="message-time" id="initial-time"></div>
+                </div>
+            </div>
+            
+            <div class="typing-indicator" id="typing-indicator" style="display: none;">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+            
+            <div class="chat-input-container">
+                <div class="input-wrapper">
+                    <textarea 
+                        id="chat-input" 
+                        placeholder="Tapez votre message en français..."
+                        rows="1"
+                        maxlength="1000"
+                    ></textarea>
+                    <button id="send-button" type="button">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22,2 15,22 11,13 2,9"></polygon>
+                        </svg>
+                    </button>
+                </div>
+                <div class="input-info">
+                    <span id="char-count">0/1000</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration pour la version embed
+        let config = {
+            chatbot: {
+                title: 'Assistant CroissantLLM',
+                placeholder: 'Tapez votre message en français...',
+                primaryColor: '#4A90E2',
+                maxMessages: 50
+            }
+        };
+        
+        let chatHistory = [];
+        
+        // Éléments DOM
+        const chatMessages = document.getElementById('chat-messages');
+        const chatInput = document.getElementById('chat-input');
+        const sendButton = document.getElementById('send-button');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+        const charCount = document.getElementById('char-count');
+        
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadConfig();
+            setupEventListeners();
+            updateStatus('online');
+            updateInitialTime();
+            autoResize();
+            
+            // Message de démarrage spécifique pour l'embed
+            console.log('Chatbot CroissantLLM embed ready');
+            
+            // Permettre la communication avec la page parent
+            setupParentCommunication();
+        });
+        
+        // Configuration pour la communication avec la page parent
+        function setupParentCommunication() {
+            // Écouter les messages de configuration de la page parent
+            window.addEventListener('message', (event) => {
+                if (event.data.type === 'chatbot-config') {
+                    applyCustomConfig(event.data.config);
+                }
+            });
+            
+            // Signaler que le chatbot est prêt
+            if (window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'chatbot-ready',
+                    source: 'croissant-chatbot'
+                }, '*');
+            }
+        }
+        
+        // Appliquer une configuration personnalisée
+        function applyCustomConfig(customConfig) {
+            config = { ...config, ...customConfig };
+            
+            if (config.chatbot.title) {
+                document.getElementById('chat-title').textContent = config.chatbot.title;
+            }
+            
+            if (config.chatbot.placeholder) {
+                chatInput.placeholder = config.chatbot.placeholder;
+            }
+            
+            if (config.chatbot.primaryColor) {
+                document.documentElement.style.setProperty('--primary-color', config.chatbot.primaryColor);
+            }
+            
+            if (config.chatbot.secondaryColor) {
+                document.documentElement.style.setProperty('--secondary-color', config.chatbot.secondaryColor);
+            }
+            
+            if (config.chatbot.textColor) {
+                document.documentElement.style.setProperty('--text-color', config.chatbot.textColor);
+            }
+        }
+        
+        // Charger la configuration du serveur
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/config');
+                const serverConfig = await response.json();
+                config = { ...config, ...serverConfig };
+                
+                // Appliquer la configuration
+                document.getElementById('chat-title').textContent = config.chatbot.title;
+                chatInput.placeholder = config.chatbot.placeholder;
+                document.documentElement.style.setProperty('--primary-color', config.chatbot.primaryColor);
+            } catch (error) {
+                console.error('Erreur lors du chargement de la configuration:', error);
+            }
+        }
+        
+        // Configuration des événements
+        function setupEventListeners() {
+            sendButton.addEventListener('click', sendMessage);
+            chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+            
+            chatInput.addEventListener('input', () => {
+                autoResize();
+                updateCharCount();
+            });
+        }
+        
+        // Envoyer un message
+        async function sendMessage() {
+            const message = chatInput.value.trim();
+            if (!message) return;
+            
+            // Ajouter le message utilisateur
+            addMessage(message, 'user');
+            chatInput.value = '';
+            autoResize();
+            updateCharCount();
+            
+            // Notifier la page parent du nouveau message
+            if (window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'chatbot-message',
+                    source: 'croissant-chatbot',
+                    message: { type: 'user', content: message }
+                }, '*');
+            }
+            
+            // Afficher l'indicateur de frappe
+            showTyping();
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        history: chatHistory.slice(-10)
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    hideTyping();
+                    addMessage(data.response, 'bot');
+                    
+                    // Notifier la page parent de la réponse
+                    if (window.parent !== window) {
+                        window.parent.postMessage({
+                            type: 'chatbot-message',
+                            source: 'croissant-chatbot',
+                            message: { type: 'bot', content: data.response }
+                        }, '*');
+                    }
+                } else {
+                    hideTyping();
+                    addMessage('Désolé, une erreur est survenue: ' + data.error, 'error');
+                }
+                
+            } catch (error) {
+                hideTyping();
+                addMessage('Erreur de connexion au serveur', 'error');
+                console.error('Erreur:', error);
+            }
+        }
+        
+        // Ajouter un message à la conversation
+        function addMessage(content, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = content;
+            
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = new Date().toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            messageDiv.appendChild(contentDiv);
+            messageDiv.appendChild(timeDiv);
+            
+            // Ajouter à l'historique
+            chatHistory.push({
+                content: content,
+                type: type === 'user' ? 'user' : 'bot',
+                timestamp: Date.now()
+            });
+            
+            // Limiter l'historique
+            if (chatHistory.length > config.chatbot.maxMessages) {
+                chatHistory = chatHistory.slice(-config.chatbot.maxMessages);
+            }
+            
+            chatMessages.appendChild(messageDiv);
+            scrollToBottom();
+        }
+        
+        // Utilitaires
+        function showTyping() {
+            typingIndicator.style.display = 'flex';
+            scrollToBottom();
+        }
+        
+        function hideTyping() {
+            typingIndicator.style.display = 'none';
+        }
+        
+        function scrollToBottom() {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        function autoResize() {
+            chatInput.style.height = 'auto';
+            chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + 'px';
+        }
+        
+        function updateCharCount() {
+            const count = chatInput.value.length;
+            charCount.textContent = `${count}/1000`;
+            charCount.style.color = count > 900 ? '#e74c3c' : '#7f8c8d';
+        }
+        
+        function updateStatus(status) {
+            statusDot.className = `status-dot ${status}`;
+            statusText.textContent = status === 'online' ? 'En ligne' : 'Hors ligne';
+        }
+        
+        function updateInitialTime() {
+            document.getElementById('initial-time').textContent = new Date().toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+        
+        // API publique pour la page parent
+        window.ChatbotEmbed = {
+            sendMessage: function(message) {
+                chatInput.value = message;
+                sendMessage();
+            },
+            
+            clearChat: function() {
+                chatMessages.innerHTML = `
+                    <div class="message bot-message">
+                        <div class="message-content">
+                            Conversation effacée. Comment puis-je vous aider ?
+                        </div>
+                        <div class="message-time">${new Date().toLocaleTimeString('fr-FR', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        })}</div>
+                    </div>
+                `;
+                chatHistory = [];
+            },
+            
+            getHistory: function() {
+                return chatHistory;
+            },
+            
+            updateConfig: function(newConfig) {
+                applyCustomConfig(newConfig);
+            }
+        };
+    </script>
+</body>
+</html>
