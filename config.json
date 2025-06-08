@@ -1,0 +1,21 @@
+{
+  "port": 3000,
+  "llamaCppPath": "./llama.cpp/llama-cli",
+  "modelPath": "./models/croissant.gguf",
+  "maxTokens": 100,
+  "temperature": 0.7,
+  "chatbot": {
+    "title": "Assistant CroissantLLM",
+    "placeholder": "Tapez votre message en français...",
+    "primaryColor": "#4A90E2",
+    "secondaryColor": "#F5F5F5",
+    "textColor": "#333333",
+    "maxMessages": 50,
+    "typingDelay": 100
+  },
+  "llamaArgs": {
+    "ctx_size": 2048,
+    "threads": 4,
+    "batch_size": 512
+  }
+}
