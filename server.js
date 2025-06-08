@@ -41,22 +41,22 @@ app.post('/api/chat', async (req, res) => {
             return res.status(400).json({ error: 'Message requis' });
         }
 
-        // Construire le contexte avec l'historique
+        // Construire le prompt avec le format ChatML de CroissantLLM
         let prompt = '';
         
         // Ajouter l'historique des messages précédents
         if (history.length > 0) {
             history.forEach(msg => {
                 if (msg.type === 'user') {
-                    prompt += `Utilisateur: ${msg.content}\n`;
+                    prompt += `<|im_start|>user\n${msg.content}<|im_end|>\n`;
                 } else if (msg.type === 'bot') {
-                    prompt += `Assistant: ${msg.content}\n`;
+                    prompt += `<|im_start|>assistant\n${msg.content}<|im_end|>\n`;
                 }
             });
         }
         
-        // Ajouter le message actuel
-        prompt += `Utilisateur: ${message}\nAssistant:`;
+        // Ajouter le message actuel et commencer la réponse de l'assistant
+        prompt += `<|im_start|>user\n${message}<|im_end|>\n<|im_start|>assistant\n`;
 
         console.log('Prompt envoyé:', prompt);
 
@@ -89,7 +89,9 @@ function callLlamaCpp(prompt) {
             '-t', config.llamaArgs.threads.toString(),
             '-b', config.llamaArgs.batch_size.toString(),
             '--no-display-prompt',
-            '--no-warmup'  // Éviter le réchauffage à chaque appel
+            '-e',  // Traiter les échappements
+            '-s', '-1',  // Seed aléatoire
+            '--no-cnv'  // Désactiver le mode conversation automatique
         ];
 
         console.log('Commande llama.cpp:', config.llamaCppPath, args.join(' '));
@@ -109,13 +111,19 @@ function callLlamaCpp(prompt) {
 
         llamaProcess.on('close', (code) => {
             if (code === 0) {
-                // Nettoyer la sortie
-                const cleanOutput = output
-                    .replace(/^\s*\n/, '') // Enlever les nouvelles lignes au début
-                    .replace(/\n\s*$/, '') // Enlever les nouvelles lignes à la fin
+                // Nettoyer la sortie : supprimer <|im_end|> et autres tokens
+                let cleanOutput = output
+                    .replace(/<\|im_end\|>/g, '')  // Supprimer les tokens de fin
+                    .replace(/^\s*\n/, '')         // Enlever les nouvelles lignes au début
+                    .replace(/\n\s*$/, '')         // Enlever les nouvelles lignes à la fin
                     .trim();
                 
-                resolve(cleanOutput || 'Désolé, je n\'ai pas pu générer une réponse.');
+                // Si la réponse est vide, fournir un message par défaut
+                if (!cleanOutput) {
+                    cleanOutput = 'Désolé, je n\'ai pas pu générer une réponse.';
+                }
+                
+                resolve(cleanOutput);
             } else {
                 console.error('Erreur llama.cpp:', errorOutput);
                 reject(new Error(`llama.cpp a échoué avec le code ${code}: ${errorOutput}`));
@@ -127,11 +135,11 @@ function callLlamaCpp(prompt) {
             reject(new Error(`Impossible de lancer llama.cpp: ${error.message}`));
         });
 
-        // Timeout de sécurité plus long pour Windows et premier démarrage
+        // Timeout de sécurité 
         setTimeout(() => {
             llamaProcess.kill();
-            reject(new Error('Timeout: llama.cpp a pris trop de temps (60s)'));
-        }, 60000); // 60 secondes au lieu de 30
+            reject(new Error('Timeout: llama.cpp a pris trop de temps (90s)'));
+        }, 90000); // 90 secondes pour la première génération
     });
 }
 
@@ -162,6 +170,7 @@ app.listen(PORT, () => {
     console.log(`🔗 Version embeddable: http://localhost:${PORT}/embed`);
     console.log(`🤖 Modèle: ${config.modelPath}`);
     console.log(`⚙️  llama.cpp: ${config.llamaCppPath}`);
-    console.log(`⏰ Timeout: 60 secondes`);
-    console.log(`💡 Conseil: La première génération peut prendre plus de temps`);
+    console.log(`⏰ Timeout: 90 secondes`);
+    console.log(`💡 Format utilisé: ChatML (<|im_start|>/<|im_end|>)`);
+    console.log(`💬 Première génération peut prendre 30-60 secondes`);
 });
