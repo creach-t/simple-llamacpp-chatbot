@@ -32,6 +32,80 @@ app.get('/api/config', (req, res) => {
     });
 });
 
+// Fonction pour formater le prompt selon le template
+function formatPrompt(message, history, templateType) {
+    let prompt = '';
+    
+    switch (templateType) {
+        case 'vigogne_chat':
+            // Template Vigogne Chat: <|UTILISATEUR|>: ... <|ASSISTANT|>:
+            if (history.length > 0) {
+                history.forEach(msg => {
+                    if (msg.type === 'user') {
+                        prompt += `<|UTILISATEUR|>: ${msg.content}\n`;
+                    } else if (msg.type === 'bot') {
+                        prompt += `<|ASSISTANT|>: ${msg.content}\n`;
+                    }
+                });
+            }
+            prompt += `<|UTILISATEUR|>: ${message}\n<|ASSISTANT|>:`;
+            break;
+            
+        case 'vigogne_instruct':
+            // Template Vigogne Instruct: ### Instruction: ... ### Response:
+            prompt = `Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n${message}\n\n### Response:`;
+            break;
+            
+        case 'chatml':
+        default:
+            // Template ChatML (Qwen, CroissantLLM): <|im_start|>user ... <|im_end|>
+            if (history.length > 0) {
+                history.forEach(msg => {
+                    if (msg.type === 'user') {
+                        prompt += `<|im_start|>user\n${msg.content}<|im_end|>\n`;
+                    } else if (msg.type === 'bot') {
+                        prompt += `<|im_start|>assistant\n${msg.content}<|im_end|>\n`;
+                    }
+                });
+            }
+            prompt += `<|im_start|>user\n${message}<|im_end|>\n<|im_start|>assistant\n`;
+            break;
+    }
+    
+    return prompt;
+}
+
+// Fonction pour nettoyer la sortie selon le template
+function cleanOutput(output, templateType) {
+    let cleanOutput = output;
+    
+    switch (templateType) {
+        case 'vigogne_chat':
+            cleanOutput = cleanOutput
+                .replace(/<\|UTILISATEUR\|>:.*$/g, '') // Supprimer les répétitions
+                .replace(/<\|ASSISTANT\|>:/g, '')
+                .trim();
+            break;
+            
+        case 'vigogne_instruct':
+            cleanOutput = cleanOutput
+                .replace(/### Instruction:.*$/g, '')
+                .replace(/### Response:/g, '')
+                .trim();
+            break;
+            
+        case 'chatml':
+        default:
+            cleanOutput = cleanOutput
+                .replace(/<\|im_end\|>/g, '')
+                .replace(/<\|im_start\|>.*$/g, '')
+                .trim();
+            break;
+    }
+    
+    return cleanOutput;
+}
+
 // Route principale du chat
 app.post('/api/chat', async (req, res) => {
     try {
@@ -41,31 +115,22 @@ app.post('/api/chat', async (req, res) => {
             return res.status(400).json({ error: 'Message requis' });
         }
 
-        // Construire le prompt avec le format ChatML de CroissantLLM
-        let prompt = '';
+        // Déterminer le type de template
+        const templateType = config.templateType || 'chatml';
         
-        // Ajouter l'historique des messages précédents
-        if (history.length > 0) {
-            history.forEach(msg => {
-                if (msg.type === 'user') {
-                    prompt += `<|im_start|>user\n${msg.content}<|im_end|>\n`;
-                } else if (msg.type === 'bot') {
-                    prompt += `<|im_start|>assistant\n${msg.content}<|im_end|>\n`;
-                }
-            });
-        }
-        
-        // Ajouter le message actuel et commencer la réponse de l'assistant
-        prompt += `<|im_start|>user\n${message}<|im_end|>\n<|im_start|>assistant\n`;
+        // Construire le prompt selon le template
+        const prompt = formatPrompt(message, history, templateType);
 
+        console.log('Template utilisé:', templateType);
         console.log('Prompt envoyé:', prompt);
 
         // Appeler llama.cpp
-        const response = await callLlamaCpp(prompt);
+        const response = await callLlamaCpp(prompt, templateType);
         
         res.json({ 
             response: response.trim(),
-            status: 'success'
+            status: 'success',
+            template: templateType
         });
 
     } catch (error) {
@@ -78,7 +143,7 @@ app.post('/api/chat', async (req, res) => {
 });
 
 // Fonction pour appeler llama.cpp
-function callLlamaCpp(prompt) {
+function callLlamaCpp(prompt, templateType) {
     return new Promise((resolve, reject) => {
         const args = [
             '-m', config.modelPath,
@@ -110,19 +175,15 @@ function callLlamaCpp(prompt) {
 
         llamaProcess.on('close', (code) => {
             if (code === 0) {
-                // Nettoyer la sortie : supprimer <|im_end|> et autres tokens
-                let cleanOutput = output
-                    .replace(/<\|im_end\|>/g, '')  // Supprimer les tokens de fin
-                    .replace(/^\s*\n/, '')         // Enlever les nouvelles lignes au début
-                    .replace(/\n\s*$/, '')         // Enlever les nouvelles lignes à la fin
-                    .trim();
+                // Nettoyer la sortie selon le template
+                let cleanedOutput = cleanOutput(output, templateType);
                 
                 // Si la réponse est vide, fournir un message par défaut
-                if (!cleanOutput) {
-                    cleanOutput = 'Désolé, je n\'ai pas pu générer une réponse.';
+                if (!cleanedOutput) {
+                    cleanedOutput = 'Désolé, je n\'ai pas pu générer une réponse.';
                 }
                 
-                resolve(cleanOutput);
+                resolve(cleanedOutput);
             } else {
                 console.error('Erreur llama.cpp:', errorOutput);
                 reject(new Error(`llama.cpp a échoué avec le code ${code}: ${errorOutput}`));
@@ -138,7 +199,7 @@ function callLlamaCpp(prompt) {
         setTimeout(() => {
             llamaProcess.kill();
             reject(new Error('Timeout: llama.cpp a pris trop de temps (90s)'));
-        }, 90000); // 90 secondes pour la première génération
+        }, 90000);
     });
 }
 
@@ -148,7 +209,8 @@ app.get('/api/health', (req, res) => {
         status: 'ok', 
         timestamp: new Date().toISOString(),
         model: config.modelPath,
-        llamaPath: config.llamaCppPath
+        llamaPath: config.llamaCppPath,
+        template: config.templateType || 'chatml'
     });
 });
 
@@ -164,12 +226,15 @@ app.use((error, req, res, next) => {
 // Démarrer le serveur
 const PORT = config.port || 3000;
 app.listen(PORT, () => {
+    const templateType = config.templateType || 'chatml';
+    const modelName = path.basename(config.modelPath, '.gguf');
+    
     console.log(`🚀 Serveur démarré sur le port ${PORT}`);
     console.log(`📱 Interface: http://localhost:${PORT}`);
     console.log(`🔗 Version embeddable: http://localhost:${PORT}/embed`);
-    console.log(`🤖 Modèle: ${config.modelPath}`);
+    console.log(`🤖 Modèle: ${modelName}`);
     console.log(`⚙️  llama.cpp: ${config.llamaCppPath}`);
+    console.log(`📝 Template: ${templateType}`);
     console.log(`⏰ Timeout: 90 secondes`);
-    console.log(`💡 Format utilisé: ChatML (<|im_start|>/<|im_end|>)`);
     console.log(`💬 Première génération peut prendre 30-60 secondes`);
 });
