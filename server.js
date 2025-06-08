@@ -90,8 +90,7 @@ function callLlamaCpp(prompt) {
             '-b', config.llamaArgs.batch_size.toString(),
             '--no-display-prompt',
             '-e',  // Traiter les échappements
-            '-s', '-1',  // Seed aléatoire
-            '--no-cnv'  // Désactiver le mode conversation automatique
+            '-s', '-1'  // Seed aléatoire
         ];
 
         console.log('Commande llama.cpp:', config.llamaCppPath, args.join(' '));
