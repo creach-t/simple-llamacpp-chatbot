@@ -88,7 +88,8 @@ function callLlamaCpp(prompt) {
             '-c', config.llamaArgs.ctx_size.toString(),
             '-t', config.llamaArgs.threads.toString(),
             '-b', config.llamaArgs.batch_size.toString(),
-            '--no-display-prompt'
+            '--no-display-prompt',
+            '--no-warmup'  // Éviter le réchauffage à chaque appel
         ];
 
         console.log('Commande llama.cpp:', config.llamaCppPath, args.join(' '));
@@ -126,11 +127,11 @@ function callLlamaCpp(prompt) {
             reject(new Error(`Impossible de lancer llama.cpp: ${error.message}`));
         });
 
-        // Timeout de sécurité
+        // Timeout de sécurité plus long pour Windows et premier démarrage
         setTimeout(() => {
             llamaProcess.kill();
-            reject(new Error('Timeout: llama.cpp a pris trop de temps'));
-        }, 30000); // 30 secondes
+            reject(new Error('Timeout: llama.cpp a pris trop de temps (60s)'));
+        }, 60000); // 60 secondes au lieu de 30
     });
 }
 
@@ -161,4 +162,6 @@ app.listen(PORT, () => {
     console.log(`🔗 Version embeddable: http://localhost:${PORT}/embed`);
     console.log(`🤖 Modèle: ${config.modelPath}`);
     console.log(`⚙️  llama.cpp: ${config.llamaCppPath}`);
+    console.log(`⏰ Timeout: 60 secondes`);
+    console.log(`💡 Conseil: La première génération peut prendre plus de temps`);
 });
